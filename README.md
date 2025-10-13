@@ -1,135 +1,283 @@
-# Turborepo starter
+# Employeah - Employee Management System
 
-This Turborepo starter is maintained by the Turborepo core team.
+A comprehensive employee management system with bulk Excel upload capabilities and an intuitive dashboard for employee data visualization and management.
 
-## Using this example
+## Tech Stack
 
-Run the following command:
+- **Backend**: Bun + Hono + PostgreSQL + Drizzle ORM + PgBoss + Redis
+- **Frontend**: Vue.js 3 + TailwindCSS + Chart.js
+- **Build Tool**: Turborepo + Vite
+- **Queue System**: PgBoss for background job processing
+- **Caching**: Redis for performance optimization
 
-```sh
-npx create-turbo@latest
-```
+## Features
 
-## What's inside?
+### ✅ MVP Features Implemented
 
-This Turborepo includes the following packages/apps:
+1. **Bulk Excel Upload**
+   - Drag & drop file upload interface
+   - Excel file validation (.xlsx, .xls)
+   - Real-time processing status with progress bar
+   - Background processing using PgBoss queues
+   - Detailed error reporting per row
+   - Template download functionality
 
-### Apps and Packages
+2. **Employee Dashboard**
+   - Key metrics cards (total records, records today, average age, countries)
+   - Interactive charts (gender distribution, country distribution, age distribution, timeline)
+   - Real-time data updates
+   - Responsive design
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+3. **Record Management**
+   - Paginated record listing
+   - Advanced search and filtering
+   - Bulk operations (update, delete)
+   - Inline editing capabilities
+   - CSV export functionality
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+4. **Database Schema**
+   - `trx_employee` table with proper indexes
+   - Upload job tracking
+   - Error logging system
 
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
-```
-
-You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+## Project Structure
 
 ```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
+employeah/
+├── apps/
+│   ├── api/                 # Backend API (Hono + Bun)
+│   │   ├── src/
+│   │   │   ├── config/     # PgBoss, Redis configurations
+│   │   │   ├── controllers/ # API controllers
+│   │   │   ├── services/   # Business logic services
+│   │   │   ├── workers/    # Background workers
+│   │   │   ├── db/         # Database schema and migrations
+│   │   │   └── index.ts    # Main server file
+│   │   └── package.json
+│   └── web/                # Frontend (Vue.js)
+│       ├── src/
+│       │   ├── views/       # Page components
+│       │   ├── services/    # API services
+│       │   ├── router/      # Vue Router
+│       │   └── style.css    # TailwindCSS styles
+│       └── package.json
+├── packages/               # Shared packages
+└── turbo.json            # Turborepo configuration
 ```
 
-### Develop
+## Setup Instructions
 
-To develop all apps and packages, run the following command:
+### Prerequisites
 
-```
-cd my-turborepo
+- Node.js 18+
+- Bun 1.3.0+
+- PostgreSQL 14+
+- Redis 6+
 
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
+### 1. Clone and Install Dependencies
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
+```bash
+git clone <repository-url>
+cd employeah
+bun install
 ```
 
-### Remote Caching
+### 2. Database Setup
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+Create a PostgreSQL database and update the connection string in `apps/api/.env`:
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
+```bash
+# apps/api/.env
+DATABASE_URL=postgresql://username:password@localhost:5432/employeah
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
 ```
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+### 3. Run Database Migrations
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
+```bash
+cd apps/api
+bun run db:generate
+bun run db:migrate
 ```
 
-## Useful Links
+### 4. Start Services
 
-Learn more about the power of Turborepo:
+#### Start Redis
+```bash
+redis-server
+```
 
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+#### Start Backend API
+```bash
+cd apps/api
+bun run dev
+```
+
+#### Start Frontend
+```bash
+cd apps/web
+bun run dev
+```
+
+### 5. Access the Application
+
+- **Frontend**: http://localhost:5173
+- **API**: http://localhost:3000
+- **API Health Check**: http://localhost:3000/health
+
+## API Endpoints
+
+### Upload Endpoints
+- `POST /api/upload/excel` - Upload Excel file
+- `GET /api/upload/status/:jobId` - Get upload status
+- `GET /api/upload/errors/:jobId` - Get upload errors
+- `GET /api/upload/template` - Download Excel template
+
+### Records Endpoints
+- `GET /api/records` - List records with pagination and filters
+- `GET /api/records/:id` - Get single record
+- `PUT /api/records/:id` - Update record
+- `DELETE /api/records/:id` - Delete record
+- `POST /api/records/bulk-update` - Bulk update records
+
+### Dashboard Endpoints
+- `GET /api/dashboard/stats` - Get dashboard statistics
+- `GET /api/dashboard/charts/:type` - Get chart data
+- `GET /api/dashboard/countries` - Get countries list
+
+## Excel Template Format
+
+The Excel file must contain the following columns:
+
+| Column | Required | Format | Description |
+|--------|----------|--------|-------------|
+| firstname | Yes | VARCHAR(10) | Employee first name (max 10 characters) |
+| lastname | Yes | VARCHAR(10) | Employee last name (max 10 characters) |
+| gender | Yes | CHAR(6) | Gender (max 6 characters) |
+| country | Yes | VARCHAR(20) | Country name (max 20 characters) |
+| age | Yes | INTEGER | Age (0-99) |
+| date | Yes | DATE | Date in YYYY-MM-DD format |
+
+## Architecture Highlights
+
+### Efficient File Processing
+- **Background Processing**: Files are processed asynchronously using PgBoss queues
+- **Batch Processing**: Records are inserted in batches of 100 for optimal performance
+- **Error Handling**: Comprehensive error tracking with detailed row-level reporting
+- **File Cleanup**: Automatic cleanup of uploaded files after processing
+
+### Performance Optimizations
+- **Redis Caching**: Dashboard statistics and search results are cached
+- **Database Indexes**: Optimized indexes on frequently queried columns
+- **Pagination**: Efficient pagination for large datasets
+- **Connection Pooling**: Optimized database connection management
+
+### Scalability Features
+- **Queue System**: PgBoss handles concurrent file processing
+- **Worker Separation**: Background workers are separated from API processes
+- **Horizontal Scaling**: Designed to support multiple worker instances
+- **Caching Strategy**: Multi-level caching for improved performance
+
+## Development
+
+### Running in Development Mode
+
+```bash
+# Start all services
+bun run dev
+
+# Or start individually
+cd apps/api && bun run dev
+cd apps/web && bun run dev
+```
+
+### Database Migrations
+
+```bash
+cd apps/api
+bun run db:generate  # Generate migration files
+bun run db:migrate  # Run migrations
+```
+
+### Linting and Formatting
+
+```bash
+bun run lint
+bun run format
+```
+
+## Production Deployment
+
+### Environment Variables
+
+Create production environment files:
+
+**Backend (`apps/api/.env`)**:
+```
+DATABASE_URL=postgresql://username:password@host:5432/database
+REDIS_HOST=redis-host
+REDIS_PORT=6379
+REDIS_PASSWORD=redis-password
+PORT=3000
+```
+
+**Frontend (`apps/web/.env`)**:
+```
+VITE_API_URL=https://your-api-domain.com
+```
+
+### Build for Production
+
+```bash
+bun run build
+```
+
+### Docker Deployment
+
+```dockerfile
+# Example Dockerfile for API
+FROM oven/bun:1.3.0
+WORKDIR /app
+COPY package.json bun.lockb ./
+RUN bun install --production
+COPY . .
+RUN bun run build
+EXPOSE 3000
+CMD ["bun", "run", "start"]
+```
+
+## Monitoring and Maintenance
+
+### Health Checks
+- API health endpoint: `GET /health`
+- Worker status monitoring
+- Database connection monitoring
+- Redis connection monitoring
+
+### Logging
+- Structured logging for all operations
+- Error tracking and alerting
+- Performance metrics collection
+
+### Backup Strategy
+- Regular database backups
+- File storage backup
+- Configuration backup
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.
+
+## Support
+
+For support and questions, please create an issue in the repository or contact the development team.
