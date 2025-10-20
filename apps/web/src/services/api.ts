@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -32,21 +32,31 @@ api.interceptors.response.use(
   }
 );
 
-export interface UploadResponse {
+// Updated interfaces to match new backend API response format
+export interface ApiResponse<T = any> {
   success: boolean;
+  message: string;
+  data?: T;
+  error?: string;
+  timestamp: string;
+  requestId?: string;
+}
+
+export interface UploadResponse {
   jobId: number;
+  filename: string;
   message: string;
 }
 
 export interface UploadStatus {
   jobId: number;
-  status: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
   progress: number;
-  totalRecords: number;
-  processedRecords: number;
-  failedRecords: number;
-  createdAt: string;
-  completedAt?: string;
+  totalRecords?: number;
+  processedRecords?: number;
+  failedRecords?: number;
+  createdAt: Date;
+  completedAt?: Date;
 }
 
 export interface UploadError {
@@ -114,17 +124,37 @@ export const uploadService = {
       },
     });
 
-    return response.data;
+    // Handle new API response format
+    const apiResponse: ApiResponse<UploadResponse> = response.data;
+    if (!apiResponse.success) {
+      throw new Error(apiResponse.error || apiResponse.message);
+    }
+    
+    return apiResponse.data!;
   },
 
   async getUploadStatus(jobId: number): Promise<UploadStatus> {
     const response = await api.get(`/api/upload/status/${jobId}`);
-    return response.data;
+    
+    // Handle new API response format
+    const apiResponse: ApiResponse<UploadStatus> = response.data;
+    if (!apiResponse.success) {
+      throw new Error(apiResponse.error || apiResponse.message);
+    }
+    
+    return apiResponse.data!;
   },
 
   async getUploadErrors(jobId: number): Promise<{ jobId: number; errors: UploadError[] }> {
     const response = await api.get(`/api/upload/errors/${jobId}`);
-    return response.data;
+    
+    // Handle new API response format
+    const apiResponse: ApiResponse<{ jobId: number; errors: UploadError[] }> = response.data;
+    if (!apiResponse.success) {
+      throw new Error(apiResponse.error || apiResponse.message);
+    }
+    
+    return apiResponse.data!;
   },
 
   async downloadTemplate(): Promise<Blob> {
@@ -150,22 +180,50 @@ export const recordsService = {
     sortOrder?: string;
   }) {
     const response = await api.get('/api/records', { params });
-    return response.data;
+    
+    // Handle new API response format
+    const apiResponse: ApiResponse = response.data;
+    if (!apiResponse.success) {
+      throw new Error(apiResponse.error || apiResponse.message);
+    }
+    
+    return apiResponse.data;
   },
 
   async getRecord(id: number): Promise<Record> {
     const response = await api.get(`/api/records/${id}`);
-    return response.data;
+    
+    // Handle new API response format
+    const apiResponse: ApiResponse<Record> = response.data;
+    if (!apiResponse.success) {
+      throw new Error(apiResponse.error || apiResponse.message);
+    }
+    
+    return apiResponse.data!;
   },
 
   async updateRecord(id: number, data: Partial<Record>): Promise<Record> {
     const response = await api.put(`/api/records/${id}`, data);
-    return response.data;
+    
+    // Handle new API response format
+    const apiResponse: ApiResponse<Record> = response.data;
+    if (!apiResponse.success) {
+      throw new Error(apiResponse.error || apiResponse.message);
+    }
+    
+    return apiResponse.data!;
   },
 
   async deleteRecord(id: number): Promise<{ message: string }> {
     const response = await api.delete(`/api/records/${id}`);
-    return response.data;
+    
+    // Handle new API response format
+    const apiResponse: ApiResponse<{ message: string }> = response.data;
+    if (!apiResponse.success) {
+      throw new Error(apiResponse.error || apiResponse.message);
+    }
+    
+    return apiResponse.data!;
   },
 
   async bulkUpdate(recordIds: number[], updates: Partial<Record>): Promise<{
@@ -176,24 +234,55 @@ export const recordsService = {
       recordIds,
       updates,
     });
-    return response.data;
+    
+    // Handle new API response format
+    const apiResponse: ApiResponse<{
+      message: string;
+      updatedCount: number;
+    }> = response.data;
+    if (!apiResponse.success) {
+      throw new Error(apiResponse.error || apiResponse.message);
+    }
+    
+    return apiResponse.data!;
   },
 };
 
 export const dashboardService = {
   async getStats(): Promise<DashboardStats> {
     const response = await api.get('/api/dashboard/stats');
-    return response.data;
+    
+    // Handle new API response format
+    const apiResponse: ApiResponse<DashboardStats> = response.data;
+    if (!apiResponse.success) {
+      throw new Error(apiResponse.error || apiResponse.message);
+    }
+    
+    return apiResponse.data!;
   },
 
   async getChartData(type: string): Promise<ChartData> {
     const response = await api.get(`/api/dashboard/charts/${type}`);
-    return response.data;
+    
+    // Handle new API response format
+    const apiResponse: ApiResponse<ChartData> = response.data;
+    if (!apiResponse.success) {
+      throw new Error(apiResponse.error || apiResponse.message);
+    }
+    
+    return apiResponse.data!;
   },
 
   async getCountries(): Promise<string[]> {
     const response = await api.get('/api/dashboard/countries');
-    return response.data;
+    
+    // Handle new API response format
+    const apiResponse: ApiResponse<string[]> = response.data;
+    if (!apiResponse.success) {
+      throw new Error(apiResponse.error || apiResponse.message);
+    }
+    
+    return apiResponse.data!;
   },
 };
 

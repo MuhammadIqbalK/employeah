@@ -221,23 +221,39 @@ const loadDashboardData = async () => {
 // Load chart data
 const loadChartData = async () => {
   try {
+    console.log('🔄 Loading chart data...');
+    
     // Load gender chart
+    console.log('📊 Loading gender chart...');
     const genderData = await dashboardService.getChartData('gender');
+    console.log('✅ Gender chart data:', genderData);
     createGenderChart(genderData);
 
     // Load country chart
+    console.log('📊 Loading country chart...');
     const countryData = await dashboardService.getChartData('country');
+    console.log('✅ Country chart data:', countryData);
     createCountryChart(countryData);
 
     // Load age chart
+    console.log('📊 Loading age chart...');
     const ageData = await dashboardService.getChartData('age');
+    console.log('✅ Age chart data:', ageData);
     createAgeChart(ageData);
 
     // Load timeline chart
+    console.log('📊 Loading timeline chart...');
     const timelineData = await dashboardService.getChartData('timeline');
+    console.log('✅ Timeline chart data:', timelineData);
     createTimelineChart(timelineData);
+    
+    console.log('🎉 All charts loaded successfully!');
   } catch (error) {
-    console.error('Failed to load chart data:', error);
+    console.error('❌ Failed to load chart data:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+    });
   }
 };
 
@@ -382,7 +398,7 @@ const createTimelineChart = (data: any) => {
 };
 
 // Auto-refresh every 5 minutes
-let refreshInterval: number | null = null;
+let refreshInterval: ReturnType<typeof setInterval> | null = null;
 
 onMounted(() => {
   loadDashboardData();

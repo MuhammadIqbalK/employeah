@@ -4,6 +4,7 @@ import { db } from '../db';
 import { trxEmployee } from '../db/schema';
 import { redis, CACHE_KEYS, CACHE_TTL } from '../config/redis';
 import { count, sql, desc } from 'drizzle-orm';
+import { ApiResponse } from '../types/api.types';
 
 const dashboardController = new Hono();
 
@@ -18,7 +19,8 @@ dashboardController.get('/stats', async (c) => {
     // Try to get from cache first
     const cachedStats = await redis.get(CACHE_KEYS.DASHBOARD_STATS);
     if (cachedStats) {
-      return c.json(JSON.parse(cachedStats));
+      const stats = JSON.parse(cachedStats);
+      return c.json(ApiResponse.success('Dashboard stats retrieved from cache', stats));
     }
 
     // Get total records count
@@ -117,11 +119,11 @@ dashboardController.get('/stats', async (c) => {
     // Cache the results
     await redis.setex(CACHE_KEYS.DASHBOARD_STATS, CACHE_TTL.DASHBOARD_STATS, JSON.stringify(stats));
 
-    return c.json(stats);
+    return c.json(ApiResponse.success('Dashboard stats retrieved successfully', stats));
 
   } catch (error: unknown) {
     console.error('Dashboard stats error:', error);
-    return c.json({ error: 'Failed to fetch dashboard statistics' }, 500);
+    return c.json(ApiResponse.error('Failed to fetch dashboard statistics', error instanceof Error ? error.message : 'Unknown error'), 500);
   }
 });
 
@@ -142,13 +144,13 @@ dashboardController.get('/charts/:type', async (c) => {
           .from(trxEmployee)
           .groupBy(trxEmployee.gender);
         
-        return c.json({
+        return c.json(ApiResponse.success('Gender chart data retrieved successfully', {
           type: 'pie',
           data: genderData.map(item => ({
             label: item.gender,
             value: item.count,
           })),
-        });
+        }));
 
       case 'country':
         const countryData = await db
@@ -161,13 +163,13 @@ dashboardController.get('/charts/:type', async (c) => {
           .orderBy(desc(count()))
           .limit(15);
         
-        return c.json({
+        return c.json(ApiResponse.success('Country chart data retrieved successfully', {
           type: 'bar',
           data: countryData.map(item => ({
             label: item.country,
             value: item.count,
           })),
-        });
+        }));
 
       case 'age':
         const ageData = await db
@@ -194,13 +196,13 @@ dashboardController.get('/charts/:type', async (c) => {
             ELSE '70+'
           END`);
         
-        return c.json({
+        return c.json(ApiResponse.success('Age chart data retrieved successfully', {
           type: 'histogram',
           data: ageData.map(item => ({
             label: item.ageRange,
             value: item.count,
           })),
-        });
+        }));
 
       case 'timeline':
         // Get records added over the last 30 days
@@ -217,21 +219,21 @@ dashboardController.get('/charts/:type', async (c) => {
           .groupBy(sql`DATE(${trxEmployee.createdAt})`)
           .orderBy(sql`DATE(${trxEmployee.createdAt})`);
         
-        return c.json({
+        return c.json(ApiResponse.success('Timeline chart data retrieved successfully', {
           type: 'line',
           data: timelineData.map(item => ({
             label: item.date,
             value: item.count,
           })),
-        });
+        }));
 
       default:
-        return c.json({ error: 'Invalid chart type' }, 400);
+        return c.json(ApiResponse.error('Invalid chart type', 'Chart type must be one of: gender, country, age, timeline'), 400);
     }
 
   } catch (error) {
     console.error('Chart data error:', error);
-    return c.json({ error: 'Failed to fetch chart data' }, 500);
+    return c.json(ApiResponse.error('Failed to fetch chart data', error instanceof Error ? error.message : 'Unknown error'), 500);
   }
 });
 
@@ -243,7 +245,8 @@ dashboardController.get('/countries', async (c) => {
     // Try to get from cache first
     const cachedCountries = await redis.get(CACHE_KEYS.COUNTRY_LIST);
     if (cachedCountries) {
-      return c.json(JSON.parse(cachedCountries));
+      const countries = JSON.parse(cachedCountries);
+      return c.json(ApiResponse.success('Countries retrieved from cache', countries));
     }
 
     const countries = await db
@@ -256,11 +259,11 @@ dashboardController.get('/countries', async (c) => {
     // Cache the results
     await redis.setex(CACHE_KEYS.COUNTRY_LIST, CACHE_TTL.COUNTRY_LIST, JSON.stringify(countryList));
 
-    return c.json(countryList);
+    return c.json(ApiResponse.success('Countries retrieved successfully', countryList));
 
   } catch (error) {
     console.error('Countries list error:', error);
-    return c.json({ error: 'Failed to fetch countries list' }, 500);
+    return c.json(ApiResponse.error('Failed to fetch countries list', error instanceof Error ? error.message : 'Unknown error'), 500);
   }
 });
 

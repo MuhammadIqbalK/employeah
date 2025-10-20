@@ -19,10 +19,16 @@ boss.on('error', error => console.error(error));
 
 // Queue names
 export const QUEUE_NAMES = {
+  // Legacy queue names
   EXCEL_PROCESSING: 'excel-processing',
   EMAIL_NOTIFICATIONS: 'email-notifications',
   DATA_VALIDATION: 'data-validation',
   REPORT_GENERATION: 'report-generation',
+  
+  // New three-step processing queues
+  EXCEL_PARSE_VALIDATE: 'excel-parse-validate',
+  DATA_INSERT: 'data-insert',
+  ERROR_LOGGING: 'error-logging',
 } as const;
 
 export default boss;

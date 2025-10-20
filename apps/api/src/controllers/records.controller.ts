@@ -5,6 +5,7 @@ import { trxEmployee } from '../db/schema';
 import { redis, CACHE_KEYS, CACHE_TTL } from '../config/redis';
 import { eq, and, or, like, gte, lte, desc, asc, count, sql } from 'drizzle-orm';
 import { OptimizedCacheService } from '../services/optimized-cache.service';
+import { ApiResponse } from '../types/api.types';
 
 const recordsController = new Hono();
 
@@ -251,7 +252,8 @@ recordsController.get('/', async (c) => {
     // Use cursor-based pagination for better performance
     if (useCursor || page === 0) {
       const filters = { search, gender, country, ageMin, ageMax, dateFrom, dateTo, sortBy, sortOrder };
-      return c.json(await OptimizedCacheService.getRecordsWithCursor(cursor, limit, filters));
+      const result = await OptimizedCacheService.getRecordsWithCursor(cursor, limit, filters);
+      return c.json(ApiResponse.success('Records retrieved successfully', result));
     }
 
     // Fallback to traditional pagination for complex filters
@@ -268,7 +270,7 @@ recordsController.get('/', async (c) => {
     if (cachedResult) {
       const result = JSON.parse(cachedResult);
       result.cached = true;
-      return c.json(result);
+      return c.json(ApiResponse.success('Records retrieved from cache', result));
     }
 
     // Build where conditions
@@ -319,7 +321,23 @@ recordsController.get('/', async (c) => {
     const total = totalResult[0].count;
 
     // Get records
-    const orderBy = sortOrder === 'desc' ? desc(trxEmployee[sortBy]) : asc(trxEmployee[sortBy]);
+    const getOrderByColumn = (sortBy: string) => {
+      switch (sortBy) {
+        case 'id': return trxEmployee.id;
+        case 'firstname': return trxEmployee.firstname;
+        case 'lastname': return trxEmployee.lastname;
+        case 'gender': return trxEmployee.gender;
+        case 'country': return trxEmployee.country;
+        case 'age': return trxEmployee.age;
+        case 'date': return trxEmployee.date;
+        case 'createdAt': return trxEmployee.createdAt;
+        case 'updatedAt': return trxEmployee.updatedAt;
+        default: return trxEmployee.id;
+      }
+    };
+    
+    const orderByColumn = getOrderByColumn(sortBy);
+    const orderBy = sortOrder === 'desc' ? desc(orderByColumn) : asc(orderByColumn);
     
     const records = await db
       .select()
@@ -354,11 +372,11 @@ recordsController.get('/', async (c) => {
       }
     }
 
-    return c.json(result);
+    return c.json(ApiResponse.success('Records retrieved successfully', result));
 
   } catch (error) {
     console.error('Records fetch error:', error);
-    return c.json({ error: 'Failed to fetch records' }, 500);
+    return c.json(ApiResponse.error('Failed to fetch records', error instanceof Error ? error.message : 'Unknown error'), 500);
   }
 });
 
@@ -436,7 +454,7 @@ recordsController.put('/:id', async (c) => {
         gender,
         country,
         age,
-        date: new Date(date),
+        date: date,
         updatedAt: new Date(),
       })
       .where(eq(trxEmployee.id, id))
@@ -539,7 +557,7 @@ recordsController.post('/bulk-update', async (c) => {
     if (updates.gender) updateData.gender = updates.gender;
     if (updates.country) updateData.country = updates.country;
     if (updates.age) updateData.age = updates.age;
-    if (updates.date) updateData.date = new Date(updates.date);
+    if (updates.date) updateData.date = updates.date;
 
     // Perform bulk update
     const updatedRecords = await db

@@ -215,7 +215,7 @@ const uploadStatus = ref<UploadStatus>({
   totalRecords: 0,
   processedRecords: 0,
   failedRecords: 0,
-  createdAt: '',
+  createdAt: new Date(),
 });
 const uploadErrors = ref<UploadError[]>([]);
 const statusInterval = ref<number | null>(null);
@@ -270,7 +270,7 @@ const removeFile = () => {
     totalRecords: 0,
     processedRecords: 0,
     failedRecords: 0,
-    createdAt: '',
+    createdAt: new Date(),
   };
   uploadErrors.value = [];
   if (statusInterval.value) {

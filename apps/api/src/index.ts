@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { logger } from 'hono/logger';
 import { prettyJSON } from 'hono/pretty-json';
 import { cors } from 'hono/cors';
-import uploadController from './controllers/upload.controller';
+import { uploadRoutes } from './routes/upload.routes';
 import recordsController from './controllers/records.controller';
 import dashboardController from './controllers/dashboard.controller';
 import { excelWorker } from './workers/excel.worker';
@@ -90,7 +90,7 @@ app.get('/test-redis', async (c) => {
 });
 
 // API routes
-app.route('/api/upload', uploadController);
+app.route('/api/upload', uploadRoutes);
 app.route('/api/records', recordsController);
 app.route('/api/dashboard', dashboardController);
 

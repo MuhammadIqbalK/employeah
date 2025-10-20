@@ -414,8 +414,30 @@ const loadRecords = async () => {
   try {
     isLoading.value = true;
     const response = await recordsService.getRecords(filters.value);
-    records.value = response.records;
-    pagination.value = response.pagination;
+    
+    // Handle new API response format
+    if (response && response.data) {
+      records.value = response.data.records || response.data;
+      pagination.value = response.data.pagination || {
+        page: 1,
+        limit: 50,
+        total: response.data.length || 0,
+        totalPages: 1,
+        hasNext: false,
+        hasPrev: false,
+      };
+    } else {
+      // Fallback for old format
+      records.value = response.records || response;
+      pagination.value = response.pagination || {
+        page: 1,
+        limit: 50,
+        total: response.length || 0,
+        totalPages: 1,
+        hasNext: false,
+        hasPrev: false,
+      };
+    }
   } catch (error) {
     console.error('Failed to load records:', error);
   } finally {

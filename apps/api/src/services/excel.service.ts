@@ -1,95 +1,57 @@
-import * as XLSX from 'xlsx';
-import { z } from 'zod';
-import { db } from '../db';
-import { trxEmployee, uploadJobs, uploadErrors } from '../db/schema';
-import { eq } from 'drizzle-orm';
+/**
+ * Excel Processing Service
+ * Main service for handling Excel file processing operations
+ */
+
 import * as fs from 'fs';
-
-// Excel row validation schema
-const ExcelRowSchema = z.object({
-  firstname: z.string().max(10, 'First name must be 10 characters or less'),
-  lastname: z.string().max(10, 'Last name must be 10 characters or less'),
-  gender: z.string().max(6, 'Gender must be 6 characters or less'),
-  country: z.string().max(20, 'Country must be 20 characters or less'),
-  age: z.number().min(0).max(99, 'Age must be between 0 and 99'),
-  date: z.string().refine((val) => {
-    const date = new Date(val);
-    return !isNaN(date.getTime());
-  }, 'Invalid date format'),
-});
-
-export interface ProcessedRow {
-  rowNumber: number;
-  data: any;
-  isValid: boolean;
-  errors: string[];
-}
-
-export interface ProcessingResult {
-  totalRows: number;
-  validRows: number;
-  invalidRows: number;
-  errors: Array<{
-    rowNumber: number;
-    errorType: string;
-    errorMessage: string;
-    rawData: any;
-  }>;
-}
+import { ExcelUtils } from '../utils/excel.utils';
+import { ExcelRepository } from '../repositories/excel.repository';
+import { 
+  ExcelRowData, 
+  ProcessedRow, 
+  ValidationError, 
+  ParseValidateResult, 
+  ProcessingResult,
+  ExcelJobData 
+} from '../types/excel.types';
 
 export class ExcelService {
-  /**
-   * Parse Excel file and validate data structure
-   */
-  static async parseExcelFile(filePath: string): Promise<ProcessedRow[]> {
-    try {
-      const workbook = XLSX.readFile(filePath);
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      
-      // Convert to JSON with header row
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-      
-      if (jsonData.length < 2) {
-        throw new Error('Excel file must contain at least a header row and one data row');
-      }
+  private static readonly CHUNK_SIZE = 100;
 
+  /**
+   * Parse Excel file, validate data, and return chunks for processing
+   * This function only does parsing and validation - no database operations
+   */
+  static async parseValidate(filePath: string, jobId: number): Promise<ParseValidateResult> {
+    try {
+      console.log('🔍 Parsing and validating Excel file:', {
+        filePath,
+        jobId,
+        fileExists: fs.existsSync(filePath)
+      });
+
+      // Validate file exists
+      ExcelUtils.validateFile(filePath);
+
+      // Read Excel file
+      const jsonData = ExcelUtils.readExcelFile(filePath);
       const headers = jsonData[0] as string[];
-      const expectedHeaders = ['firstname', 'lastname', 'gender', 'country', 'age', 'date'];
       
       // Validate headers
-      const missingHeaders = expectedHeaders.filter(h => !headers.includes(h));
-      if (missingHeaders.length > 0) {
-        throw new Error(`Missing required headers: ${missingHeaders.join(', ')}`);
-      }
+      ExcelUtils.validateHeaders(headers);
 
-      const processedRows: ProcessedRow[] = [];
-      
-      // Process each data row
-      for (let i = 1; i < jsonData.length; i++) {
-        const row = jsonData[i] as any[];
-        const rowData: any = {};
-        
-        // Map row data to object
-        headers.forEach((header, index) => {
-          rowData[header] = row[index];
-        });
+      // Process rows
+      const { validRows, errorRecords } = this.processRows(jsonData, headers);
 
-        // Validate row data
-        const validationResult = ExcelRowSchema.safeParse({
-          ...rowData,
-          age: typeof rowData.age === 'string' ? parseInt(rowData.age) : rowData.age,
-        });
+      // Create chunks from valid rows
+      const validChunks = ExcelUtils.chunkArray(validRows, this.CHUNK_SIZE);
 
-        processedRows.push({
-          rowNumber: i + 1,
-          data: rowData,
-          isValid: validationResult.success,
-          errors: validationResult.success ? [] : validationResult.error.errors.map(e => e.message),
-        });
-      }
+      console.log(`✅ Parsing completed: ${validChunks.length} chunks, ${errorRecords.length} errors`);
 
-      return processedRows;
+      return {
+        validChunks,
+        errorRecords,
+      };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'An unknown error occurred';
       throw new Error(`Failed to parse Excel file: ${message}`);
@@ -97,6 +59,71 @@ export class ExcelService {
   }
 
   /**
+   * Process all rows in the Excel file
+   */
+  private static processRows(jsonData: any[][], headers: string[]): {
+    validRows: ExcelRowData[];
+    errorRecords: ValidationError[];
+  } {
+    const validRows: ExcelRowData[] = [];
+    const errorRecords: ValidationError[] = [];
+
+    // Process each data row (skip header row)
+    for (let i = 1; i < jsonData.length; i++) {
+      const row = jsonData[i] as any[];
+      const rowData = ExcelUtils.mapRowData(headers, row);
+      const processedRow = ExcelUtils.validateRowData(rowData, i + 1);
+
+      if (processedRow.isValid) {
+        const dbReadyData = ExcelUtils.convertToDbFormat(processedRow.data);
+        validRows.push(dbReadyData);
+      } else {
+        const error = ExcelUtils.createValidationError(
+          processedRow.rowNumber,
+          processedRow.errors,
+          processedRow.data
+        );
+        errorRecords.push(error);
+      }
+    }
+
+    return { validRows, errorRecords };
+  }
+
+  /**
+   * Insert data chunk to trx_employee table
+   */
+  static async insertDataChunk(jobId: number, chunkData: ExcelRowData[]): Promise<void> {
+    try {
+      console.log(`📝 Inserting chunk of ${chunkData.length} records for job ${jobId}`);
+
+      await ExcelRepository.insertEmployeeBatch(chunkData);
+
+      console.log(`✅ Successfully inserted ${chunkData.length} records for job ${jobId}`);
+    } catch (error: unknown) {
+      console.error(`❌ Failed to insert chunk for job ${jobId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Log error records to upload_errors table
+   */
+  static async logErrors(jobId: number, errorRecords: ValidationError[]): Promise<void> {
+    try {
+      console.log(`📝 Logging ${errorRecords.length} error records for job ${jobId}`);
+
+      await ExcelRepository.insertErrorBatch(jobId, errorRecords);
+
+      console.log(`✅ Successfully logged ${errorRecords.length} error records for job ${jobId}`);
+    } catch (error: unknown) {
+      console.error(`❌ Failed to log errors for job ${jobId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Legacy method - kept for backward compatibility
    * Process Excel file and save to database
    */
   static async processExcelFile(
@@ -105,127 +132,98 @@ export class ExcelService {
     createdBy?: string
   ): Promise<ProcessingResult> {
     try {
-      console.log('🔍 Processing Excel file:', {
+      console.log('🔍 Processing Excel file (legacy method):', {
         filePath,
         jobId,
         fileExists: fs.existsSync(filePath),
         createdBy
       });
 
-      // Check if file exists
-      if (!fs.existsSync(filePath)) {
-        throw new Error(`File not found: ${filePath}`);
-      }
-
       // Update job status to processing
-      await db.update(uploadJobs)
-        .set({ status: 'processing' })
-        .where(eq(uploadJobs.id, jobId));
+      await ExcelRepository.updateJobStatus(jobId, { status: 'processing' });
 
-      // Parse Excel file
-      const processedRows = await this.parseExcelFile(filePath);
+      // Parse and validate
+      const { validChunks, errorRecords } = await this.parseValidate(filePath, jobId);
+      
+      // Calculate totals
+      const totalRecords = validChunks.reduce((sum, chunk) => sum + chunk.length, 0) + errorRecords.length;
+      const validRowsCount = validChunks.reduce((sum, chunk) => sum + chunk.length, 0);
       
       // Update job with total records count
-      await db.update(uploadJobs)
-        .set({ totalRecords: processedRows.length })
-        .where(eq(uploadJobs.id, jobId));
+      await ExcelRepository.updateJobStatus(jobId, { totalRecords });
       
       const result: ProcessingResult = {
-        totalRows: processedRows.length,
-        validRows: 0,
-        invalidRows: 0,
-        errors: [],
+        totalRows: totalRecords,
+        validRows: validRowsCount,
+        invalidRows: errorRecords.length,
+        errors: errorRecords,
       };
 
-      // Process valid rows in batches
-      const validRows = processedRows.filter(row => row.isValid);
-      const invalidRows = processedRows.filter(row => !row.isValid);
-
-      result.validRows = validRows.length;
-      result.invalidRows = invalidRows.length;
-
-      // Save invalid rows errors
-      for (const row of invalidRows) {
-        const errorRecord = {
-          jobId,
-          rowNumber: row.rowNumber,
-          errorType: 'validation',
-          errorMessage: row.errors.join(', '),
-          rawData: row.data,
-        };
-
-        await db.insert(uploadErrors).values(errorRecord);
-        result.errors.push(errorRecord);
+      // Log errors
+      if (errorRecords.length > 0) {
+        await this.logErrors(jobId, errorRecords);
       }
 
-      // Process valid rows in batches of 100
-      const batchSize = 100;
-      for (let i = 0; i < validRows.length; i += batchSize) {
-        const batch = validRows.slice(i, i + batchSize);
-        
-        const recordsToInsert = batch.map(row => ({
-          firstname: row.data.firstname,
-          lastname: row.data.lastname,
-          gender: row.data.gender,
-          country: row.data.country,
-          age: parseInt(row.data.age),
-          date: new Date(row.data.date),
-        }));
-
-        try {
-          await db.insert(trxEmployee).values(recordsToInsert as any);
-          
-          // Update processed records count
-          await db.update(uploadJobs)
-            .set({ 
-              processedRecords: i + batch.length,
-              status: i + batch.length === validRows.length ? 'completed' : 'processing'
-            })
-            .where(eq(uploadJobs.id, jobId));
-
-        } catch (error: unknown) {
-          // Handle batch insertion errors
-          console.error(`Batch insertion error:`, error);
-          
-          // Mark individual rows as failed
-          for (const row of batch) {
-            const errorRecord = {
-              jobId,
-              rowNumber: row.rowNumber,
-              errorType: 'insertion',
-              errorMessage: error instanceof Error ? error.message : 'An unknown error occurred',
-              rawData: row.data,
-            };
-
-            await db.insert(uploadErrors).values(errorRecord);
-            result.errors.push(errorRecord);
-            result.invalidRows++;
-            result.validRows--;
-          }
-        }
-      }
+      // Insert valid chunks
+      await this.processValidChunks(jobId, validChunks, result);
 
       // Update final job status
-      await db.update(uploadJobs)
-        .set({ 
-          status: 'completed',
-          completedAt: new Date(),
-          failedRecords: result.invalidRows,
-        })
-        .where(eq(uploadJobs.id, jobId));
+      await ExcelRepository.updateJobStatus(jobId, { 
+        status: 'completed',
+        completedAt: new Date(),
+        failedRecords: result.invalidRows,
+      });
 
       return result;
     } catch (error: unknown) {
       // Update job status to failed
-      await db.update(uploadJobs)
-        .set({ 
-          status: 'failed',
-          errorDetails: { error: error instanceof Error ? error.message : 'An unknown error occurred' },
-          completedAt: new Date(),
-        })
-        .where(eq(uploadJobs.id, jobId));
+      await ExcelRepository.updateJobStatus(jobId, { 
+        status: 'failed',
+        errorDetails: { error: error instanceof Error ? error.message : 'An unknown error occurred' },
+        completedAt: new Date(),
+      });
 
       throw error;
+    }
+  }
+
+  /**
+   * Process valid chunks and handle errors
+   */
+  private static async processValidChunks(
+    jobId: number, 
+    validChunks: ExcelRowData[][], 
+    result: ProcessingResult
+  ): Promise<void> {
+    for (let i = 0; i < validChunks.length; i++) {
+      const chunk = validChunks[i];
+      try {
+        await this.insertDataChunk(jobId, chunk);
+        
+        // Update processed records count
+        const processedSoFar = validChunks.slice(0, i + 1).reduce((sum, c) => sum + c.length, 0);
+        await ExcelRepository.updateJobStatus(jobId, { 
+          processedRecords: processedSoFar,
+          status: processedSoFar === result.validRows ? 'completed' : 'processing'
+        });
+
+      } catch (error: unknown) {
+        console.error(`Batch insertion error:`, error);
+        
+        // Mark individual rows as failed
+        const failedErrors = chunk.map((record, index) => 
+          ExcelUtils.createInsertionError(
+            i * this.CHUNK_SIZE + index + 1, // Approximate row number
+            error instanceof Error ? error : new Error('An unknown error occurred'),
+            record
+          )
+        );
+
+        await this.logErrors(jobId, failedErrors);
+        result.errors.push(...failedErrors);
+        result.invalidRows += chunk.length;
+        result.validRows -= chunk.length;
+      }
     }
   }
 
@@ -233,27 +231,13 @@ export class ExcelService {
    * Get upload job status
    */
   static async getUploadJobStatus(jobId: number) {
-    const job = await db.select()
-      .from(uploadJobs)
-      .where(eq(uploadJobs.id, jobId))
-      .limit(1);
-
-    if (job.length === 0) {
-      throw new Error('Upload job not found');
-    }
-
-    return job[0];
+    return await ExcelRepository.getJobById(jobId);
   }
 
   /**
    * Get upload errors for a job
    */
   static async getUploadErrors(jobId: number) {
-    const errors = await db.select()
-      .from(uploadErrors)
-      .where(eq(uploadErrors.jobId, jobId))
-      .orderBy(uploadErrors.rowNumber);
-
-    return errors;
+    return await ExcelRepository.getJobErrors(jobId);
   }
 }
